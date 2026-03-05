@@ -1,0 +1,1198 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TPM-FI Command Center | Weekly FI Tracking Dashboard V2</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <style>
+    :root{
+      --bg:#0b1220; --card:#111b2e; --card2:#0f172a; --text:#e5e7eb; --muted:#9ca3af;
+      --line:#23314f; --good:#22c55e; --warn:#f59e0b; --bad:#ef4444; --accent:#60a5fa;
+      --soft:#0b1426;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans Thai",sans-serif;background:linear-gradient(180deg,var(--bg),#070b14);color:var(--text)}
+    header{padding:18px 18px 10px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(11,18,32,.9);backdrop-filter: blur(10px);z-index:9}
+    h1{font-size:18px;margin:0}
+    .sub{color:var(--muted);font-size:12px;margin-top:4px;max-width:1100px}
+    main{padding:16px;max-width:1500px;margin:0 auto}
+    .grid{display:grid;gap:12px}
+    .card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--line);border-radius:14px;padding:12px}
+    .filters{grid-template-columns:repeat(12,1fr)}
+    label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+    select,input{width:100%;padding:10px 10px;border-radius:10px;border:1px solid var(--line);background:var(--soft);color:var(--text);outline:none}
+    input[type="file"]{padding:8px}
+    input::placeholder{color:#6b7280}
+    button{padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--soft);color:var(--text);cursor:pointer}
+    button:hover{border-color:#33507f}
+    .two{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .right{margin-left:auto}
+    .pill{display:inline-flex;gap:6px;align-items:center;padding:4px 8px;border-radius:999px;border:1px solid var(--line);font-size:12px;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:99px;background:var(--accent)}
+    .kpis{grid-template-columns:repeat(12,1fr)}
+    .kpi{grid-column:span 3}
+    .kpi .value{font-size:22px;font-weight:800;margin-top:6px}
+    .kpi .hint{font-size:12px;color:var(--muted);margin-top:4px}
+    .row{grid-template-columns:repeat(12,1fr)}
+    .span12{grid-column:span 12}
+    .span8{grid-column:span 8}
+    .span6{grid-column:span 6}
+    .span4{grid-column:span 4}
+    .title2{font-weight:800}
+    .small{font-size:11px;color:var(--muted)}
+    .muted{color:var(--muted)}
+    .tablewrap{overflow:auto;border-radius:12px;border:1px solid var(--line)}
+    table{width:100%;border-collapse:collapse;min-width:980px;background:var(--soft)}
+    th,td{padding:10px 10px;border-bottom:1px solid var(--line);font-size:12px}
+    th{position:sticky;top:0;background:#0a1324;color:#cbd5e1;text-align:left;z-index:1}
+    tr:hover td{background:#0b1a33}
+    .tag{padding:3px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);display:inline-block}
+    .A{color:#bbf7d0;border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.12)}
+    .B{color:#fde68a;border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.12)}
+    .C{color:#fecaca;border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.12)}
+    .status{color:#93c5fd}
+    .kpiBox{border:1px solid var(--line);border-radius:12px;padding:10px;background:rgba(11,20,38,.8)}
+    .rank1{font-weight:900}
+    .heat{font-weight:800;border-radius:10px;padding:6px 8px;display:inline-block;min-width:80px;text-align:right}
+    .toast{border:1px solid var(--line);border-radius:12px;padding:10px;background:rgba(11,20,38,.9)}
+    @media (max-width: 1100px){
+      .kpi{grid-column:span 6}
+      .span8,.span6,.span4{grid-column:span 12}
+      table{min-width:1100px}
+    }
+  </style>
+</head>
+
+<body>
+<header>
+  <div class="two">
+    <div>
+      <h1>TPM-FI Command Center | Weekly FI Tracking Dashboard V2</h1>
+      <div class="sub">
+        KPI: ต้นทุน / FCR / %สูญเสีย / คุณภาพซาก(A%) • KAI: Rank A/B/C • FI Theme รายบุคคล+รายฟาร์ม (14 ฟาร์ม) • Savings Week/Cum • Ranking • Heatmap • Loss-Cost Matrix • Predictive Saving
+      </div>
+    </div>
+    <div class="right two">
+      <span class="pill"><span class="dot"></span><span id="lastUpdated">Last updated: -</span></span>
+      <span class="pill"><span class="dot" style="background:var(--good)"></span>Rank A</span>
+      <span class="pill"><span class="dot" style="background:var(--warn)"></span>Rank B</span>
+      <span class="pill"><span class="dot" style="background:var(--bad)"></span>Rank C</span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- Upload + Status -->
+  <section class="card">
+    <div class="two">
+      <div>
+        <div class="title2">อัปโหลดข้อมูลจริง (CSV)</div>
+        <div class="small">อัปโหลด kpi.csv + themes.csv แล้วระบบจะอัปเดต Dashboard อัตโนมัติ</div>
+      </div>
+      <div class="right pill"><span class="dot"></span><span id="dataStatus">Data: SAMPLE</span></div>
+    </div>
+
+    <div class="grid filters" style="margin-top:10px">
+      <div style="grid-column: span 6">
+        <label>Upload kpi.csv</label>
+        <input id="kpiFile" type="file" accept=".csv" />
+        <div class="small">คอลัมน์: week,farm,cost_thb_per_kg,fcr,loss_pct,carcassA_pct,(carcassB_pct,carcassC_pct)</div>
+      </div>
+      <div style="grid-column: span 6">
+        <label>Upload themes.csv</label>
+        <input id="themeFile" type="file" accept=".csv" />
+        <div class="small">คอลัมน์: week,farm,owner,rank,status,theme,saving_thb,(saving_thb_per_kg,note)</div>
+      </div>
+
+      <div style="grid-column: span 9">
+        <div id="msg" class="toast small muted">พร้อมใช้งาน — ถ้ายังไม่อัปโหลด จะใช้ SAMPLE DATA</div>
+      </div>
+      <div class="two" style="grid-column: span 3; justify-content:flex-end; align-items:end">
+        <button id="useSampleBtn" title="กลับไปใช้ข้อมูลตัวอย่าง">Use Sample</button>
+        <button id="exportBtn" title="Export ตาราง Theme เป็น CSV">Export CSV</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Filters -->
+  <section class="grid filters card" style="margin-top:12px">
+    <div style="grid-column: span 3">
+      <label>Week</label>
+      <select id="weekSel"></select>
+    </div>
+    <div style="grid-column: span 3">
+      <label>Farm</label>
+      <select id="farmSel"></select>
+    </div>
+    <div style="grid-column: span 3">
+      <label>Owner (ผู้รับผิดชอบ)</label>
+      <select id="ownerSel"></select>
+    </div>
+    <div style="grid-column: span 3">
+      <label>Rank (KAI)</label>
+      <select id="rankSel">
+        <option value="ALL">ทั้งหมด</option>
+        <option value="A">A</option>
+        <option value="B">B</option>
+        <option value="C">C</option>
+      </select>
+    </div>
+
+    <div style="grid-column: span 9">
+      <label>Search Theme / Keyword</label>
+      <input id="q" placeholder="เช่น ลดไฟฟ้า, ลด FCR, ลดตาย, เพิ่ม A-Grade..." />
+    </div>
+    <div class="two" style="grid-column: span 3; justify-content:flex-end; align-items:end">
+      <button id="resetBtn">Reset</button>
+      <select id="scoreFocus" style="min-width:220px">
+        <option value="overall">Overall Score</option>
+        <option value="cost">Cost Score</option>
+        <option value="fcr">FCR Score</option>
+        <option value="loss">Loss Score</option>
+        <option value="carcassA">Carcass A Score</option>
+      </select>
+    </div>
+  </section>
+
+  <!-- KPI Cards -->
+  <section class="grid kpis" style="margin-top:12px">
+    <div class="card kpi">
+      <div class="muted">KPI 1: ต้นทุนฟาร์ม (THB/kg)</div>
+      <div class="value" id="kpiCost">-</div>
+      <div class="hint" id="kpiCostTrend"></div>
+    </div>
+    <div class="card kpi">
+      <div class="muted">KPI 2: FCR</div>
+      <div class="value" id="kpiFcr">-</div>
+      <div class="hint" id="kpiFcrTrend"></div>
+    </div>
+    <div class="card kpi">
+      <div class="muted">KPI 3: %สูญเสีย</div>
+      <div class="value" id="kpiLoss">-</div>
+      <div class="hint" id="kpiLossTrend"></div>
+    </div>
+    <div class="card kpi">
+      <div class="muted">KPI 4: คุณภาพซาก (A/B/C)</div>
+      <div class="value" id="kpiCarcass">-</div>
+      <div class="hint" id="kpiCarcassTrend"></div>
+    </div>
+  </section>
+
+  <!-- Executive Summary -->
+  <section class="grid row" style="margin-top:12px">
+    <div class="card span8">
+      <div class="two">
+        <div>
+          <div class="title2">Executive Summary</div>
+          <div class="small">Top/Bottom farms จากคะแนนรวม KPI (Cost↓, FCR↓, Loss↓, CarcassA↑)</div>
+        </div>
+        <div class="right pill"><span class="dot"></span>Overall Score: <b id="overallScore">-</b></div>
+      </div>
+
+      <div class="grid row" style="margin-top:10px">
+        <div class="span6 kpiBox">
+          <div class="two">
+            <div class="title2">Top 3 Farms</div>
+            <div class="right small muted">ดีที่สุด</div>
+          </div>
+          <div id="topFarms" style="margin-top:8px;display:grid;gap:8px"></div>
+        </div>
+
+        <div class="span6 kpiBox">
+          <div class="two">
+            <div class="title2">Bottom 3 Farms</div>
+            <div class="right small muted">ต้องรีบแก้</div>
+          </div>
+          <div id="bottomFarms" style="margin-top:8px;display:grid;gap:8px"></div>
+        </div>
+      </div>
+
+      <div class="small" style="margin-top:10px">
+        *คะแนนรวม = เฉลี่ยคะแนน 0–100 ของ KPI ทั้ง 4 (Normalize ตามช่วงของ 14 ฟาร์ม ในสัปดาห์ที่เลือก)
+      </div>
+    </div>
+
+    <div class="card span4">
+      <div class="title2">KAI Rank Portfolio</div>
+      <div class="small">จำนวนธีมตาม Rank + Success + Savings</div>
+
+      <div class="two" style="margin-top:10px">
+        <span class="tag A">A: <b id="rankA">0</b></span>
+        <span class="tag B">B: <b id="rankB">0</b></span>
+        <span class="tag C">C: <b id="rankC">0</b></span>
+        <span class="pill right"><span class="dot"></span>Success: <b id="successRate">0%</b></span>
+      </div>
+
+      <div class="two" style="margin-top:10px">
+        <span class="pill"><span class="dot"></span>Week Savings: <b id="weekSaving">-</b></span>
+        <span class="pill"><span class="dot"></span>Cum Savings: <b id="cumSaving">-</b></span>
+      </div>
+
+      <div style="margin-top:12px">
+        <div class="small">Top 3 Themes by Savings</div>
+        <div id="topThemes" style="margin-top:8px;display:grid;gap:8px"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- KPI Ranking + KPI Chart -->
+  <section class="grid row" style="margin-top:12px">
+    <div class="card span6">
+      <div class="two">
+        <div>
+          <div class="title2">Farm Ranking (1–14)</div>
+          <div class="small">เรียงจาก KPI Score สูง → ต่ำ</div>
+        </div>
+      </div>
+      <div style="margin-top:10px">
+        <canvas id="rankChart" height="120"></canvas>
+      </div>
+    </div>
+
+    <div class="card span6">
+      <div class="two">
+        <div>
+          <div class="title2">KPI by Farm</div>
+          <div class="small">เปรียบเทียบ 14 ฟาร์ม (สัปดาห์ที่เลือก)</div>
+        </div>
+        <div class="right">
+          <select id="chartMetric" style="min-width:220px">
+            <option value="cost_thb_per_kg">Cost (THB/kg)</option>
+            <option value="fcr">FCR</option>
+            <option value="loss_pct">%สูญเสีย</option>
+            <option value="carcassA_pct">Carcass A%</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:10px">
+        <canvas id="barChart" height="120"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- Heatmap -->
+  <section class="card span12" style="margin-top:12px">
+    <div class="two">
+      <div>
+        <div class="title2">Heatmap (14 Farms × 4 KPI)</div>
+        <div class="small">สีเข้ม = ดีกว่า (Cost/FCR/Loss ต่ำดี, CarcassA สูงดี)</div>
+      </div>
+      <div class="right small muted" id="heatInfo">-</div>
+    </div>
+    <div class="tablewrap" style="margin-top:10px">
+      <table id="heatTable">
+        <thead>
+          <tr>
+            <th>Farm</th>
+            <th>Cost (THB/kg)</th>
+            <th>FCR</th>
+            <th>%Loss</th>
+            <th>Carcass A%</th>
+            <th>Overall Score</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Loss-Cost Matrix + Predictive Saving -->
+  <section class="grid row" style="margin-top:12px">
+    <div class="card span8">
+      <div class="two">
+        <div>
+          <div class="title2">Loss–Cost Matrix (Bubble)</div>
+          <div class="small">X = Cost (THB/kg), Y = %Loss, Bubble size = Week Savings</div>
+        </div>
+        <div class="right small muted">เป้าหมาย: ไปมุมซ้ายล่าง</div>
+      </div>
+      <div style="margin-top:10px">
+        <canvas id="matrixChart" height="120"></canvas>
+      </div>
+    </div>
+
+    <div class="card span4">
+      <div class="title2">Predictive Saving (Simple Forecast)</div>
+      <div class="small">คาดการณ์ Savings สัปดาห์ถัดไปจากเทรนด์ 3 สัปดาห์ (รวมตามฟิลเตอร์)</div>
+      <div style="margin-top:10px" class="kpiBox">
+        <div class="muted">Forecast Next Week (THB)</div>
+        <div style="font-size:26px;font-weight:900" id="forecastSaving">-</div>
+        <div class="small" id="forecastExplain">-</div>
+      </div>
+      <div style="margin-top:10px">
+        <canvas id="savingTrendChart" height="120"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- FI Theme table -->
+  <section class="card span12" style="margin-top:12px">
+    <div class="two">
+      <div>
+        <div class="title2">FI Theme Tracking (รายบุคคล + รายฟาร์ม)</div>
+        <div class="small">ตามฟิลเตอร์ Week/Farm/Owner/Rank + Keyword</div>
+      </div>
+      <div class="right small muted" id="themeCount">-</div>
+    </div>
+    <div class="tablewrap" style="margin-top:10px">
+      <table id="themeTable">
+        <thead>
+          <tr>
+            <th>Week</th>
+            <th>Farm</th>
+            <th>Theme</th>
+            <th>Owner</th>
+            <th>Rank</th>
+            <th>Status</th>
+            <th>Savings (THB)</th>
+            <th>Savings (THB/kg)</th>
+            <th class="muted">Note</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Savings by farm -->
+  <section class="card span12" style="margin-top:12px">
+    <div class="two">
+      <div>
+        <div class="title2">Savings by Farm (14 Farms)</div>
+        <div class="small">สัปดาห์นี้ + สะสม + จำนวนธีม/Rank</div>
+      </div>
+      <div class="right small muted" id="farmCount">-</div>
+    </div>
+    <div class="tablewrap" style="margin-top:10px">
+      <table id="farmTable">
+        <thead>
+          <tr>
+            <th>Farm</th>
+            <th>Week Savings (THB)</th>
+            <th>Cumulative Savings (THB)</th>
+            <th>#Themes</th>
+            <th>Rank A</th>
+            <th>Rank B</th>
+            <th>Rank C</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+/** =========================
+ *  GLOBAL DATA (can be replaced by CSV)
+ * ========================= */
+const FARM_MASTER = [
+  { id:"F01", name:"ใหม่พัฒนา 1"},
+  { id:"F02", name:"ใหม่พัฒนา 2"},
+  { id:"F03", name:"ใหม่พัฒนา 3"},
+  { id:"F04", name:"ทุ่งรวงทอง 1"},
+  { id:"F05", name:"ทุ่งรวงทอง 2"},
+  { id:"F06", name:"ทุ่งรวงทอง 3"},
+  { id:"F07", name:"อวยชัย 1"},
+  { id:"F08", name:"อวยชัย 2"},
+  { id:"F09", name:"สวนหอม 1"},
+  { id:"F10", name:"สวนหอม 2"},
+  { id:"F11", name:"เขาแก้ว 1"},
+  { id:"F12", name:"เขาแก้ว 2"},
+  { id:"F13", name:"เขาแก้ว 3"},
+  { id:"F14", name:"ทุ่งอรุณ"}
+];
+
+let DATA = buildSampleData(); // default
+
+function buildSampleData(){
+  const farms = FARM_MASTER.map(x=>({...x}));
+  const weeks = ["2026-W09","2026-W10","2026-W11"];
+  const owners = ["FI Leader","ผู้จัดการฟาร์ม","สัตวแพทย์","วิศวกร","หัวหน้าฟาร์ม"];
+  const themeNames = [
+    "ลดค่าไฟพัดลมโรงเรือน","ลด FCR จากการปรับโปรแกรมอาหาร","ลด % สูญเสียช่วง Brooding",
+    "เพิ่มคุณภาพซาก A Grade","ลดการสูญเสียจากน้ำรั่ว","ปรับระบบ Biosecurity",
+    "ลด NH3 ในโรงเรือน","ลดการใช้แกลบ","เพิ่มประสิทธิภาพการระบายอากาศ"
+  ];
+  const statuses = ["Open","In progress","Done","Closed"];
+  const ranks = ["A","B","C"];
+  const r = (min,max)=> +(min + Math.random()*(max-min)).toFixed(3);
+
+  const weekly_kpi = [];
+  for(const w of weeks){
+    for(const f of farms){
+      const A = +r(70,86).toFixed(1);
+      const B = +r(10,22).toFixed(1);
+      const C = +(100 - A - B).toFixed(1);
+      weekly_kpi.push({
+        week:w, farmId:f.id,
+        cost_thb_per_kg: +r(28.5, 33.8).toFixed(2),
+        fcr: +r(1.47, 1.62).toFixed(3),
+        loss_pct: +r(2.8, 5.8).toFixed(2),
+        carcassA_pct: A,
+        carcassB_pct: B,
+        carcassC_pct: C < 0 ? 0.5 : C
+      });
+    }
+  }
+
+  const fi_themes = [];
+  let tid = 1;
+  for(const w of weeks){
+    for(const f of farms){
+      const n = Math.floor(2 + Math.random()*4);
+      for(let i=0;i<n;i++){
+        const rank = ranks[Math.floor(Math.random()*ranks.length)];
+        const status = statuses[Math.floor(Math.random()*statuses.length)];
+        const saving = +(Math.random() * (rank==="A"?180000:rank==="B"?90000:40000)).toFixed(0);
+
+        fi_themes.push({
+          week:w, farmId:f.id, themeId:`T${tid++}`,
+          theme: themeNames[Math.floor(Math.random()*themeNames.length)],
+          owner: owners[Math.floor(Math.random()*owners.length)],
+          rank, status,
+          saving_thb: saving,
+          saving_thb_per_kg: +(saving/(Math.random()*180000+120000)).toFixed(4),
+          note:""
+        });
+      }
+    }
+  }
+
+  return { farms, weeks, owners, weekly_kpi, fi_themes, mode:"SAMPLE" };
+}
+
+/** =========================
+ *  HELPERS
+ * ========================= */
+const $ = (id)=>document.getElementById(id);
+function setMsg(t){ $("msg").textContent = t; }
+function farmName(id){ return (DATA.farms.find(x=>x.id===id)?.name) || id; }
+
+function parseNum(v, fallback=0){
+  const n = Number(String(v ?? "").replace(/,/g,"").trim());
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function fmt(n, d=2){
+  if(n===null || n===undefined || Number.isNaN(n)) return "-";
+  return (+n).toLocaleString("th-TH",{maximumFractionDigits:d, minimumFractionDigits:d});
+}
+function fmt0(n){
+  if(n===null || n===undefined || Number.isNaN(n)) return "-";
+  return (+n).toLocaleString("th-TH");
+}
+function pct(n, d=2){ return `${fmt(n,d)}%`; }
+function avg(arr, key){
+  if(!arr.length) return null;
+  return arr.reduce((s,x)=>s + (+x[key]||0), 0) / arr.length;
+}
+function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+
+/** =========================
+ *  STATE
+ * ========================= */
+const state = {
+  week: null,
+  farm: "ALL",
+  owner: "ALL",
+  rank: "ALL",
+  q: "",
+  scoreFocus: "overall"
+};
+
+/** =========================
+ *  CSV IMPORT
+ * ========================= */
+function papaParseFile(file){
+  return new Promise((resolve, reject)=>{
+    Papa.parse(file, {
+      header:true,
+      skipEmptyLines:true,
+      complete:(res)=>resolve(res.data),
+      error:(err)=>reject(err)
+    });
+  });
+}
+
+function mapFarmToId(farmNameStr){
+  const name = String(farmNameStr ?? "").trim();
+  const found = FARM_MASTER.find(f=>f.name===name);
+  return found ? found.id : null;
+}
+
+async function importKpiCsv(file){
+  const rows = await papaParseFile(file);
+
+  const weekly_kpi = rows.map(r=>{
+    const farmNameStr = String(r.farm ?? "").trim();
+    const farmId = mapFarmToId(farmNameStr) || farmNameStr; // fallback to name
+    const A = parseNum(r.carcassA_pct, NaN);
+    const B = parseNum(r.carcassB_pct, NaN);
+    const C = parseNum(r.carcassC_pct, NaN);
+
+    let a = Number.isFinite(A) ? A : 0;
+    let b = Number.isFinite(B) ? B : 0;
+    let c = Number.isFinite(C) ? C : (100 - a - b);
+
+    // if only A present, auto-fill B/C
+    if(Number.isFinite(A) && !Number.isFinite(B) && !Number.isFinite(C)){
+      b = 100 - a;
+      c = 0;
+    }
+    // normalize
+    if(a+b+c !== 100){
+      const sum = a+b+c;
+      if(sum>0){
+        a = a/sum*100; b=b/sum*100; c=c/sum*100;
+      }
+    }
+
+    return {
+      week: String(r.week ?? "").trim(),
+      farmId: typeof farmId === "string" && farmId.startsWith("F") ? farmId : mapFarmToId(farmNameStr),
+      cost_thb_per_kg: parseNum(r.cost_thb_per_kg, NaN),
+      fcr: parseNum(r.fcr, NaN),
+      loss_pct: parseNum(r.loss_pct, NaN),
+      carcassA_pct: +a.toFixed(1),
+      carcassB_pct: +b.toFixed(1),
+      carcassC_pct: +c.toFixed(1)
+    };
+  }).filter(x=>x.week && x.farmId);
+
+  return weekly_kpi;
+}
+
+async function importThemeCsv(file){
+  const rows = await papaParseFile(file);
+
+  const fi_themes = rows.map((r, idx)=>{
+    const farmNameStr = String(r.farm ?? "").trim();
+    const farmId = mapFarmToId(farmNameStr) || farmNameStr;
+
+    const rank = String(r.rank ?? "").trim().toUpperCase();
+    const rk = (rank==="A"||rank==="B"||rank==="C") ? rank : "C";
+
+    const status = String(r.status ?? "").trim() || "Open";
+
+    return {
+      week: String(r.week ?? "").trim(),
+      farmId: typeof farmId === "string" && farmId.startsWith("F") ? farmId : mapFarmToId(farmNameStr),
+      themeId: String(r.themeId ?? `T${idx+1}`),
+      theme: String(r.theme ?? "").trim(),
+      owner: String(r.owner ?? "").trim() || "N/A",
+      rank: rk,
+      status,
+      saving_thb: parseNum(r.saving_thb, 0),
+      saving_thb_per_kg: parseNum(r.saving_thb_per_kg, 0),
+      note: String(r.note ?? "").trim()
+    };
+  }).filter(x=>x.week && x.farmId && x.theme);
+
+  return fi_themes;
+}
+
+function rebuildDataFromCsv(weekly_kpi, fi_themes){
+  // farms list: use master always
+  const farms = FARM_MASTER.map(x=>({...x}));
+  // weeks: union
+  const wset = new Set();
+  weekly_kpi.forEach(x=>wset.add(x.week));
+  fi_themes.forEach(x=>wset.add(x.week));
+  const weeks = Array.from(wset).sort();
+
+  // owners from themes
+  const oset = new Set();
+  fi_themes.forEach(x=>oset.add(x.owner));
+  const owners = Array.from(oset).sort();
+
+  // ensure B/C exists
+  weekly_kpi.forEach(x=>{
+    if(!Number.isFinite(x.carcassB_pct) && !Number.isFinite(x.carcassC_pct)){
+      x.carcassB_pct = +(100 - x.carcassA_pct).toFixed(1);
+      x.carcassC_pct = 0;
+    }
+    if(!Number.isFinite(x.carcassC_pct)){
+      x.carcassC_pct = +(100 - x.carcassA_pct - (x.carcassB_pct||0)).toFixed(1);
+    }
+  });
+
+  return { farms, weeks, owners, weekly_kpi, fi_themes, mode:"CSV" };
+}
+
+/** =========================
+ *  FILTERS
+ * ========================= */
+function filterThemes({ignoreWeek=false}={}){
+  return DATA.fi_themes.filter(x=>{
+    if(!ignoreWeek && state.week && x.week !== state.week) return false;
+    if(state.farm !== "ALL" && x.farmId !== state.farm) return false;
+    if(state.owner !== "ALL" && x.owner !== state.owner) return false;
+    if(state.rank !== "ALL" && x.rank !== state.rank) return false;
+    if(state.q){
+      const s = (x.theme+" "+x.owner+" "+x.note+" "+farmName(x.farmId)).toLowerCase();
+      if(!s.includes(state.q.toLowerCase())) return false;
+    }
+    return true;
+  });
+}
+function filterKPI({week=state.week}={}){
+  return DATA.weekly_kpi.filter(x=>{
+    if(week && x.week !== week) return false;
+    if(state.farm !== "ALL" && x.farmId !== state.farm) return false;
+    return true;
+  });
+}
+
+/** =========================
+ *  KPI SUMMARY + TREND
+ * ========================= */
+function renderKPIs(){
+  const k = filterKPI();
+  const cost = avg(k,"cost_thb_per_kg");
+  const fcr  = avg(k,"fcr");
+  const loss = avg(k,"loss_pct");
+  const a    = avg(k,"carcassA_pct");
+  const b    = avg(k,"carcassB_pct");
+  const c    = avg(k,"carcassC_pct");
+
+  $("kpiCost").textContent = cost==null? "-" : fmt(cost,2);
+  $("kpiFcr").textContent  = fcr==null? "-" : fmt(fcr,3);
+  $("kpiLoss").textContent = loss==null? "-" : pct(loss,2);
+  $("kpiCarcass").textContent = (a==null) ? "-" : `${fmt(a,1)} / ${fmt(b,1)} / ${fmt(c,1)}`;
+
+  const wIdx = DATA.weeks.indexOf(state.week);
+  const prevWeek = wIdx>0 ? DATA.weeks[wIdx-1] : null;
+
+  function trendText(cur, prev, betterDirection, decimals){
+    if(prev==null || cur==null) return "";
+    const d = cur - prev;
+    const sign = d>0? "▲":"▼";
+    const abs = Math.abs(d);
+    const good = (betterDirection==="down") ? (d<0) : (d>0);
+    const color = good ? "var(--good)" : "var(--bad)";
+    return `<span style="color:${color}">${sign} ${fmt(abs,decimals)}</span> vs W-1`;
+  }
+
+  if(prevWeek){
+    const kp = filterKPI({week:prevWeek});
+    const pcost = avg(kp,"cost_thb_per_kg");
+    const pfcr  = avg(kp,"fcr");
+    const ploss = avg(kp,"loss_pct");
+    const pa    = avg(kp,"carcassA_pct");
+
+    $("kpiCostTrend").innerHTML    = trendText(cost, pcost, "down", 2);
+    $("kpiFcrTrend").innerHTML     = trendText(fcr,  pfcr,  "down", 3);
+    $("kpiLossTrend").innerHTML    = trendText(loss, ploss, "down", 2);
+    $("kpiCarcassTrend").innerHTML = trendText(a,    pa,    "up",   1);
+  }else{
+    $("kpiCostTrend").innerHTML = $("kpiFcrTrend").innerHTML = $("kpiLossTrend").innerHTML = $("kpiCarcassTrend").innerHTML = "";
+  }
+}
+
+/** =========================
+ *  SCORING 0–100 within week range
+ * ========================= */
+function computeScoresForWeek(week){
+  const rows = DATA.weekly_kpi.filter(x=>x.week===week);
+  if(!rows.length) return [];
+
+  const getRange = (key, invert=false)=>{
+    const arr = rows.map(x=>+x[key]).filter(n=>Number.isFinite(n));
+    const mn = Math.min(...arr);
+    const mx = Math.max(...arr);
+    return {mn, mx, invert};
+  };
+
+  const R = {
+    cost: getRange("cost_thb_per_kg", true),
+    fcr: getRange("fcr", true),
+    loss: getRange("loss_pct", true),
+    carcassA: getRange("carcassA_pct", false),
+  };
+
+  function scoreValue(v, {mn,mx,invert}){
+    if(!Number.isFinite(v)) return 0;
+    if(mx===mn) return 100;
+    const t = (v - mn) / (mx - mn);
+    const s = invert ? (1 - t) : t;
+    return 100 * clamp01(s);
+  }
+
+  return DATA.farms.map(f=>{
+    const r = rows.find(x=>x.farmId===f.id);
+    if(!r) return {
+      farmId:f.id, farmName:f.name, kpi:{}, score:{cost:0,fcr:0,loss:0,carcassA:0,overall:0}
+    };
+    const sc_cost = scoreValue(+r.cost_thb_per_kg, R.cost);
+    const sc_fcr  = scoreValue(+r.fcr, R.fcr);
+    const sc_loss = scoreValue(+r.loss_pct, R.loss);
+    const sc_a    = scoreValue(+r.carcassA_pct, R.carcassA);
+    const overall = (sc_cost + sc_fcr + sc_loss + sc_a) / 4;
+    return { farmId:f.id, farmName:f.name, kpi:r, score:{cost:sc_cost,fcr:sc_fcr,loss:sc_loss,carcassA:sc_a,overall} };
+  });
+}
+
+/** =========================
+ *  RANK & SAVINGS
+ * ========================= */
+function renderRankAndSavings(themes){
+  const A = themes.filter(x=>x.rank==="A").length;
+  const B = themes.filter(x=>x.rank==="B").length;
+  const C = themes.filter(x=>x.rank==="C").length;
+  $("rankA").textContent = A;
+  $("rankB").textContent = B;
+  $("rankC").textContent = C;
+
+  const done = themes.filter(x=>["Done","Closed"].includes(x.status)).length;
+  const success = themes.length ? (done/themes.length*100) : 0;
+  $("successRate").textContent = `${success.toFixed(0)}%`;
+
+  const weekSaving = themes.reduce((s,x)=>s + (+x.saving_thb||0), 0);
+  $("weekSaving").textContent = `${fmt0(weekSaving)} THB`;
+
+  const cumThemes = filterThemes({ignoreWeek:true});
+  const cumSaving = cumThemes.reduce((s,x)=>s + (+x.saving_thb||0), 0);
+  $("cumSaving").textContent = `${fmt0(cumSaving)} THB`;
+
+  const top = [...themes].sort((a,b)=>b.saving_thb-a.saving_thb).slice(0,3);
+  $("topThemes").innerHTML = top.map(t=>`
+    <div class="card" style="padding:10px;background:rgba(11,20,38,.8)">
+      <div class="two">
+        <div style="font-weight:800">${t.theme}</div>
+        <span class="tag ${t.rank}">${t.rank}</span>
+      </div>
+      <div class="small muted">${farmName(t.farmId)} • ${t.owner} • <span class="status">${t.status}</span></div>
+      <div style="margin-top:6px;font-weight:900">${fmt0(t.saving_thb)} THB</div>
+    </div>
+  `).join("") || `<div class="small muted">ไม่มีข้อมูลตามฟิลเตอร์</div>`;
+}
+
+/** =========================
+ *  EXEC SUMMARY
+ * ========================= */
+function renderExecSummary(perFarm){
+  if(!perFarm.length){
+    $("topFarms").innerHTML = `<div class="small muted">ไม่มีข้อมูล KPI ในสัปดาห์นี้</div>`;
+    $("bottomFarms").innerHTML = `<div class="small muted">ไม่มีข้อมูล KPI ในสัปดาห์นี้</div>`;
+    $("overallScore").textContent = "-";
+    return;
+  }
+  const sorted = [...perFarm].sort((a,b)=>b.score.overall - a.score.overall);
+  const top = sorted.slice(0,3);
+  const bot = sorted.slice(-3).reverse();
+
+  const cardFarm = (x, idx, tone)=>`
+    <div class="card" style="padding:10px;background:rgba(11,20,38,.8)">
+      <div class="two">
+        <div class="rank1">${idx+1}. ${x.farmName}</div>
+        <span class="pill right"><span class="dot" style="background:${tone}"></span>Score: <b>${x.score.overall.toFixed(0)}</b></span>
+      </div>
+      <div class="small muted" style="margin-top:6px">
+        Cost ${fmt(x.kpi.cost_thb_per_kg,2)} • FCR ${fmt(x.kpi.fcr,3)} • Loss ${pct(x.kpi.loss_pct,2)} • A% ${fmt(x.kpi.carcassA_pct,1)}
+      </div>
+    </div>
+  `;
+
+  $("topFarms").innerHTML = top.map((x,i)=>cardFarm(x,i,"var(--good)")).join("");
+  $("bottomFarms").innerHTML = bot.map((x,i)=>cardFarm(x,i,"var(--bad)")).join("");
+
+  const overallAvg = perFarm.reduce((s,x)=>s+x.score.overall,0)/perFarm.length;
+  $("overallScore").textContent = overallAvg.toFixed(0);
+}
+
+/** =========================
+ *  HEATMAP
+ * ========================= */
+function heatColor(score0to100){
+  const a = 0.08 + (score0to100/100)*0.35;
+  return `background: rgba(34,197,94,${a.toFixed(3)}); border:1px solid rgba(34,197,94,0.25);`;
+}
+function renderHeatmap(perFarm){
+  const sorted = [...perFarm].sort((a,b)=>b.score.overall - a.score.overall);
+  const tb = $("heatTable").querySelector("tbody");
+  tb.innerHTML = sorted.map(x=>{
+    return `
+      <tr>
+        <td><b>${x.farmName}</b></td>
+        <td><span class="heat" style="${heatColor(x.score.cost)}">${fmt(x.kpi.cost_thb_per_kg,2)}</span></td>
+        <td><span class="heat" style="${heatColor(x.score.fcr)}">${fmt(x.kpi.fcr,3)}</span></td>
+        <td><span class="heat" style="${heatColor(x.score.loss)}">${pct(x.kpi.loss_pct,2)}</span></td>
+        <td><span class="heat" style="${heatColor(x.score.carcassA)}">${fmt(x.kpi.carcassA_pct,1)}</span></td>
+        <td><span class="heat" style="${heatColor(x.score.overall)}"><b>${x.score.overall.toFixed(0)}</b></span></td>
+      </tr>
+    `;
+  }).join("");
+  $("heatInfo").textContent = `Week: ${state.week || "-"} • Normalize within 14 farms`;
+}
+
+/** =========================
+ *  TABLES
+ * ========================= */
+function renderThemeTable(themes){
+  const tb = $("themeTable").querySelector("tbody");
+  tb.innerHTML = themes.map(t=>`
+    <tr>
+      <td>${t.week}</td>
+      <td>${farmName(t.farmId)}</td>
+      <td><b>${t.theme}</b><div class="small muted">${t.themeId}</div></td>
+      <td>${t.owner}</td>
+      <td><span class="tag ${t.rank}">${t.rank}</span></td>
+      <td class="status">${t.status}</td>
+      <td><b>${fmt0(t.saving_thb)}</b></td>
+      <td>${fmt(t.saving_thb_per_kg,4)}</td>
+      <td class="muted">${t.note||"—"}</td>
+    </tr>
+  `).join("");
+  $("themeCount").textContent = `Themes: ${themes.length.toLocaleString("th-TH")}`;
+}
+
+function renderFarmSavings(themes){
+  const byFarm = new Map();
+  for(const f of DATA.farms){
+    byFarm.set(f.id, { farmId:f.id, weekSaving:0, cumSaving:0, themes:0, A:0,B:0,C:0 });
+  }
+
+  themes.forEach(t=>{
+    const g = byFarm.get(t.farmId);
+    if(!g) return;
+    g.weekSaving += t.saving_thb;
+    g.themes += 1;
+    g[t.rank] += 1;
+  });
+
+  const cumBase = filterThemes({ignoreWeek:true});
+  cumBase.forEach(t=>{
+    const g = byFarm.get(t.farmId);
+    if(!g) return;
+    g.cumSaving += t.saving_thb;
+  });
+
+  const rows = [...byFarm.values()]
+    .filter(x => state.farm==="ALL" ? true : x.farmId===state.farm)
+    .sort((a,b)=>b.weekSaving - a.weekSaving);
+
+  const tb = $("farmTable").querySelector("tbody");
+  tb.innerHTML = rows.map(x=>`
+    <tr>
+      <td><b>${farmName(x.farmId)}</b></td>
+      <td><b>${fmt0(x.weekSaving)}</b></td>
+      <td>${fmt0(x.cumSaving)}</td>
+      <td>${fmt0(x.themes)}</td>
+      <td><span class="tag A">${x.A}</span></td>
+      <td><span class="tag B">${x.B}</span></td>
+      <td><span class="tag C">${x.C}</span></td>
+    </tr>
+  `).join("");
+
+  $("farmCount").textContent = `Farms: ${rows.length.toLocaleString("th-TH")}`;
+}
+
+/** =========================
+ *  CHARTS
+ * ========================= */
+let barChart, rankChart, matrixChart, savingTrendChart;
+
+function destroyCharts(){
+  [barChart, rankChart, matrixChart, savingTrendChart].forEach(c=>{ try{ c?.destroy(); }catch{} });
+  barChart = rankChart = matrixChart = savingTrendChart = null;
+}
+
+function renderBarChart(){
+  const metric = $("chartMetric").value;
+  const week = state.week;
+  const rows = DATA.weekly_kpi
+    .filter(x=>x.week===week)
+    .filter(x=> state.farm==="ALL" ? true : x.farmId===state.farm)
+    .sort((a,b)=>a.farmId.localeCompare(b.farmId));
+
+  const labels = rows.map(x=>farmName(x.farmId));
+  const data = rows.map(x=>x[metric]);
+
+  if(barChart) barChart.destroy();
+  barChart = new Chart($("barChart"), {
+    type: "bar",
+    data: { labels, datasets: [{ label: metric, data }] },
+    options: {
+      responsive:true,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ ticks:{ color:"#cbd5e1" }, grid:{ color:"rgba(35,49,79,.55)" } },
+        y:{ ticks:{ color:"#cbd5e1" }, grid:{ color:"rgba(35,49,79,.55)" } }
+      }
+    }
+  });
+}
+
+function renderRankChart(perFarm){
+  const focus = state.scoreFocus;
+  const sorted = [...perFarm].sort((a,b)=>b.score[focus] - a.score[focus]);
+  const labels = sorted.map(x=>x.farmName);
+  const data = sorted.map(x=>+x.score[focus].toFixed(2));
+
+  if(rankChart) rankChart.destroy();
+  rankChart = new Chart($("rankChart"), {
+    type: "bar",
+    data: { labels, datasets: [{ label: `${focus} score`, data }] },
+    options:{
+      indexAxis:"y",
+      responsive:true,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ ticks:{ color:"#cbd5e1" }, grid:{ color:"rgba(35,49,79,.55)" }, suggestedMax:100 },
+        y:{ ticks:{ color:"#cbd5e1" }, grid:{ color:"rgba(35,49,79,.15)" } }
+      }
+    }
+  });
+}
+
+function renderMatrix(perFarm, themesWeek){
+  const savingByFarm = new Map();
+  for(const f of DATA.farms) savingByFarm.set(f.id, 0);
+  themesWeek.forEach(t=>{
+    savingByFarm.set(t.farmId, (savingByFarm.get(t.farmId)||0) + (t.saving_thb||0));
+  });
+
+  const points = perFarm
+    .filter(x=> state.farm==="ALL" ? true : x.farmId===state.farm)
+    .map(x=>{
+      const saving = savingByFarm.get(x.farmId)||0;
+      const r = Math.max(4, Math.min(20, Math.sqrt(saving)/60));
+      return { x:+x.kpi.cost_thb_per_kg, y:+x.kpi.loss_pct, r, label:x.farmName, saving };
+    });
+
+  if(matrixChart) matrixChart.destroy();
+  matrixChart = new Chart($("matrixChart"), {
+    type:"bubble",
+    data:{ datasets:[{ label:"Farms", data:points }] },
+    options:{
+      responsive:true,
+      plugins:{
+        tooltip:{
+          callbacks:{
+            label:(ctx)=>{
+              const p = ctx.raw;
+              return `${p.label}: Cost ${p.x}, Loss ${p.y}% , Saving ${fmt0(p.saving)} THB`;
+            }
+          }
+        },
+        legend:{ display:false }
+      },
+      scales:{
+        x:{ title:{ display:true, text:"Cost (THB/kg)" }, ticks:{ color:"#cbd5e1" }, grid:{ color:"rgba(35,49,79,.55)" } },
+        y:{ title:{ display:true, text:"Loss (%)" }, ticks:{ color:"#cbd5e1" }, grid:{ color:"rgba(35,49,79,.55)" } }
+      }
+    }
+  });
+}
+
+function renderSavingTrend(){
+  const weeks = DATA.weeks;
+  const totals = weeks.map(w=>{
+    const t = DATA.fi_themes.filter(x=>{
+      if(x.week!==w) return false;
+      if(state.farm!=="ALL" && x.farmId!==state.farm) return false;
+      if(state.owner!=="ALL" && x.owner!==state.owner) return false;
+      if(state.rank!=="ALL" && x.rank!==state.rank) return false;
+      if(state.q){
+        const s = (x.theme+" "+x.owner+" "+x.note+" "+farmName(x.farmId)).toLowerCase();
+        if(!s.includes(state.q.toLowerCase())) return false;
+      }
+      return true;
+    }).reduce((s,x)=>s + (+x.saving_thb||0), 0);
+    return t;
+  });
+
+  const last3 = totals.slice(Math.max(0,totals.length-3));
+  function linForecast(y){
+    if(y.length===0) return 0;
+    if(y.length===1) return y[0];
+    const slope = (y[y.length-1] - y[0]) / (y.length-1);
+    return y[y.length-1] + slope;
+  }
+  const forecast = Math.max(0, linForecast(last3));
+  $("forecastSaving").textContent = `${fmt0(forecast)} THB`;
+  $("forecastExplain").textContent = `เทรนด์ล่าสุด: [${last3.map(v=>fmt0(v)).join(", ")}]`;
+
+  if(savingTrendChart) savingTrendChart.destroy();
+  savingTrendChart = new Chart($("savingTrendChart"), {
+    type:"line",
+    data:{ labels: weeks, datasets:[{ label:"Total Savings (THB)", data: totals }] },
+    options:{
+      responsive:true,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ ticks:{ color:"#cbd5e1" }, grid:{ color:"rgba(35,49,79,.15)" } },
+        y:{ ticks:{ color:"#cbd5e1" }, grid:{ color:"rgba(35,49,79,.55)" } }
+      }
+    }
+  });
+}
+
+/** =========================
+ *  EXPORT CSV (Theme)
+ * ========================= */
+function exportCSV(){
+  const themes = filterThemes();
+  const header = ["week","farm","themeId","theme","owner","rank","status","saving_thb","saving_thb_per_kg","note"];
+  const lines = [header.join(",")].concat(themes.map(t=>{
+    const row = [
+      t.week,
+      `"${farmName(t.farmId)}"`,
+      t.themeId,
+      `"${(t.theme||"").replaceAll('"','""')}"`,
+      `"${t.owner.replaceAll('"','""')}"`,
+      t.rank,
+      t.status,
+      t.saving_thb,
+      t.saving_thb_per_kg,
+      `"${(t.note||"").replaceAll('"','""')}"`
+    ];
+    return row.join(",");
+  }));
+  const blob = new Blob([lines.join("\n")], {type:"text/csv;charset=utf-8;"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `FI_Themes_${state.week || "ALL"}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/** =========================
+ *  INIT FILTERS
+ * ========================= */
+function rebuildFilters(){
+  // week default: latest
+  state.week = DATA.weeks[DATA.weeks.length-1] || null;
+
+  $("weekSel").innerHTML = (DATA.weeks||[]).map(w=>`<option value="${w}">${w}</option>`).join("");
+  $("weekSel").value = state.week || "";
+
+  $("farmSel").innerHTML = [`<option value="ALL">ทั้งหมด</option>`]
+    .concat(DATA.farms.map(f=>`<option value="${f.id}">${f.name}</option>`)).join("");
+  $("farmSel").value = state.farm;
+
+  const owners = Array.from(new Set(DATA.fi_themes.map(x=>x.owner))).sort();
+  $("ownerSel").innerHTML = [`<option value="ALL">ทั้งหมด</option>`]
+    .concat(owners.map(o=>`<option value="${o}">${o}</option>`)).join("");
+  $("ownerSel").value = state.owner;
+
+  $("rankSel").value = state.rank;
+}
+
+function initEvents(){
+  $("weekSel").addEventListener("change", e=>{ state.week=e.target.value; render(); });
+  $("farmSel").addEventListener("change", e=>{ state.farm=e.target.value; render(); });
+  $("ownerSel").addEventListener("change", e=>{ state.owner=e.target.value; render(); });
+  $("rankSel").addEventListener("change", e=>{ state.rank=e.target.value; render(); });
+  $("q").addEventListener("input", e=>{ state.q=e.target.value.trim(); render(); });
+
+  $("chartMetric").addEventListener("change", ()=>renderBarChart());
+  $("scoreFocus").addEventListener("change", e=>{ state.scoreFocus=e.target.value; render(); });
+
+  $("resetBtn").addEventListener("click", ()=>{
+    state.week = DATA.weeks[DATA.weeks.length-1] || null;
+    state.farm = "ALL"; state.owner="ALL"; state.rank="ALL"; state.q=""; state.scoreFocus="overall";
+    $("weekSel").value=state.week || ""; $("farmSel").value=state.farm; $("ownerSel").value=state.owner; $("rankSel").value=state.rank;
+    $("q").value=""; $("scoreFocus").value="overall";
+    render();
+  });
+
+  $("exportBtn").addEventListener("click", exportCSV);
+
+  $("useSampleBtn").addEventListener("click", ()=>{
+    DATA = buildSampleData();
+    $("dataStatus").textContent = "Data: SAMPLE";
+    setMsg("กลับไปใช้ SAMPLE DATA แล้ว");
+    rebuildFilters();
+    destroyCharts();
+    render();
+  });
+
+  $("kpiFile").addEventListener("change", async (e)=>{
+    const file = e.target.files?.[0];
+    if(!file) return;
+    try{
+      setMsg("กำลังอ่าน kpi.csv ...");
+      const kpi = await importKpiCsv(file);
+      window.__kpi_temp__ = kpi;
+      setMsg("อ่าน kpi.csv สำเร็จ ✅ (รอ themes.csv หรือจะอัปโหลดได้เลย)");
+      tryApplyCsvData();
+    }catch(err){
+      setMsg("อ่าน kpi.csv ไม่สำเร็จ ❌ ตรวจหัวคอลัมน์/รูปแบบไฟล์");
+    }
+  });
+
+  $("themeFile").addEventListener("change", async (e)=>{
+    const file = e.target.files?.[0];
+    if(!file) return;
+    try{
+      setMsg("กำลังอ่าน themes.csv ...");
+      const themes = await importThemeCsv(file);
+      window.__themes_temp__ = themes;
+      setMsg("อ่าน themes.csv สำเร็จ ✅ (รอ kpi.csv หรือจะอัปโหลดได้เลย)");
+      tryApplyCsvData();
+    }catch(err){
+      setMsg("อ่าน themes.csv ไม่สำเร็จ ❌ ตรวจหัวคอลัมน์/รูปแบบไฟล์");
+    }
+  });
+}
+
+function tryApplyCsvData(){
+  const kpi = window.__kpi_temp__;
+  const themes = window.__themes_temp__;
+  if(!kpi || !themes) return;
+
+  DATA = rebuildDataFromCsv(kpi, themes);
+  $("dataStatus").textContent = "Data: CSV";
+  setMsg("โหลดข้อมูล CSV ครบแล้ว ✅ Dashboard อัปเดตแล้ว");
+  rebuildFilters();
+  destroyCharts();
+  render();
+}
+
+/** =========================
+ *  RENDER
+ * ========================= */
+function render(){
+  $("lastUpdated").textContent = `Last updated: ${new Date().toLocaleString("th-TH")}`;
+
+  if(!state.week){
+    setMsg("ไม่พบ Week ในข้อมูล — ตรวจไฟล์ CSV");
+    return;
+  }
+
+  renderKPIs();
+
+  const themesWeek = filterThemes();
+  renderRankAndSavings(themesWeek);
+
+  const perFarmAll = computeScoresForWeek(state.week);
+  renderExecSummary(perFarmAll);
+  renderHeatmap(perFarmAll);
+
+  renderRankChart(perFarmAll);
+  renderBarChart();
+  renderMatrix(perFarmAll, themesWeek);
+  renderSavingTrend();
+
+  renderThemeTable(themesWeek);
+  renderFarmSavings(themesWeek);
+}
+
+/** =========================
+ *  START
+ * ========================= */
+rebuildFilters();
+initEvents();
+render();
+</script>
+</body>
+</html>
